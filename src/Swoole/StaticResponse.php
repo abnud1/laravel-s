@@ -21,6 +21,8 @@ class StaticResponse extends Response
         $file = $this->laravelResponse->getFile();
         if (!$this->laravelResponse->headers->has('Content-Type')) {
             $this->swooleResponse->header('Content-Type', $file->getMimeType());
+        } else {
+            $this->swooleResponse->header('Content-Type', $this->laravelResponse->headers->get("Content-Type"));
         }
         if ($this->laravelResponse->getStatusCode() == BinaryFileResponse::HTTP_NOT_MODIFIED) {
             $this->swooleResponse->end();
