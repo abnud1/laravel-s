@@ -20,10 +20,7 @@ trait CustomProcessTrait
         $processList = [];
         foreach ($processes as $name => $item) {
             if (empty($item['class'])) {
-                throw new \InvalidArgumentException(sprintf(
-                        'process class name must be specified'
-                    )
-                );
+                throw new \InvalidArgumentException(sprintf('The class of process %s must be specified', $name));
             }
             if (isset($item['enable']) && !$item['enable']) {
                 continue;
@@ -71,24 +68,44 @@ trait CustomProcessTrait
                 }
             };
 
-            $redirect = isset($item['redirect']) ? $item['redirect'] : false;
-            $pipe = isset($item['pipe']) ? $item['pipe'] : 0;
-            $process = version_compare(SWOOLE_VERSION, '4.3.0', '>=')
-                ? new Process($callback, $redirect, $pipe, class_exists('Swoole\Coroutine'))
-                : new Process($callback, $redirect, $pipe);
-            if (isset($item['queue'])) {
-                if (empty($item['queue'])) {
-                    $process->useQueue();
-                } else {
-                    $msgKey = isset($item['msg_key']) ? $item['msg_key'] : 0;
-                    $mode = isset($item['mode']) ? $item['mode'] : 2;
-                    $capacity = isset($item['capacity']) ? $item['capacity'] : -1;
-                    $process->useQueue($msgKey, $mode, $capacity);
+            if (isset($item['num']) && $item['num'] > 1) { // For multiple processes
+                for ($i = 0; $i < $item['num']; $i++) {
+                    $process = $this->makeProcess($callback, $item);
+                    $swoole->addProcess($process);
+                    $processList[$name . $i] = $process;
                 }
+            } else {  // For single process
+                $process = $this->makeProcess($callback, $item);
+                $swoole->addProcess($process);
+                $processList[$name] = $process;
             }
-            $swoole->addProcess($process);
-            $processList[$name] = $process;
         }
         return $processList;
+    }
+
+    /**
+     * @param callable $callback
+     * @param array $config
+     * @return Process
+     */
+    public function makeProcess(callable $callback, array $config)
+    {
+        $redirect = isset($config['redirect']) ? $config['redirect'] : false;
+        $pipe = isset($config['pipe']) ? $config['pipe'] : 0;
+        $process = version_compare(SWOOLE_VERSION, '4.3.0', '>=')
+            ? new Process($callback, $redirect, $pipe, class_exists('Swoole\Coroutine'))
+            : new Process($callback, $redirect, $pipe);
+        if (isset($config['queue'])) {
+            if (empty($config['queue'])) {
+                $process->useQueue();
+            } else {
+                $msgKey = isset($config['msg_key']) ? $config['msg_key'] : 0;
+                $mode = isset($config['mode']) ? $config['mode'] : 2;
+                $capacity = isset($config['capacity']) ? $config['capacity'] : -1;
+                $process->useQueue($msgKey, $mode, $capacity);
+            }
+        }
+
+        return $process;
     }
 }
